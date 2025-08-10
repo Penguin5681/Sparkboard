@@ -46,6 +46,8 @@ export interface TextElement extends BaseElement {
   type: 'text';
   text: string;
   fontSize: number;
+  width?: number;
+  height?: number;
 }
 
 export type DrawingElement = 
@@ -64,4 +66,12 @@ export interface CanvasState {
   strokeWidth: number;
   fontSize: number;
   backgroundColor: string;
+  camera: {
+    x: number;
+    y: number;
+    scale: number;
+  };
+  isTextEditing: boolean;
+  textEditingElement: DrawingElement | null;
+  isPanning: boolean;
 }

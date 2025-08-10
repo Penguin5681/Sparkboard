@@ -12,6 +12,7 @@ interface DrawingToolsProps {
   onMouseUp: () => void;
   onMouseLeave: () => void;
   onDoubleClick: (e: React.MouseEvent<HTMLCanvasElement>) => void;
+  onWheel: (e: React.WheelEvent<HTMLCanvasElement>) => void;
 }
 
 const DrawingTools: React.FC<DrawingToolsProps> = ({ 
@@ -21,7 +22,8 @@ const DrawingTools: React.FC<DrawingToolsProps> = ({
   onMouseMove,
   onMouseUp,
   onMouseLeave,
-  onDoubleClick
+  onDoubleClick,
+  onWheel
 }) => {
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   
@@ -65,12 +67,12 @@ const DrawingTools: React.FC<DrawingToolsProps> = ({
     
     // Draw all elements
     canvasState.elements.forEach(element => {
-      drawElement(context, element);
+      drawElement(context, element, canvasState.camera);
     });
     
     // Draw current element
     if (canvasState.currentElement) {
-      drawElement(context, canvasState.currentElement);
+      drawElement(context, canvasState.currentElement, canvasState.camera);
     }
   }, [canvasState]);
   
@@ -80,13 +82,15 @@ const DrawingTools: React.FC<DrawingToolsProps> = ({
       className="drawing-canvas"
       style={{ 
         backgroundColor: canvasState.backgroundColor,
-        cursor: getCursor(canvasState.tool)
+        cursor: getCursor(canvasState.tool, canvasState.isPanning)
       }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseLeave}
       onDoubleClick={onDoubleClick}
+      onWheel={onWheel}
+      onContextMenu={(e) => e.preventDefault()} // Prevent context menu on right click
     />
   );
 };

@@ -197,3 +197,51 @@ body {
   height: 100%;
   border-radius: 0 0 16px 16px;
 }
+
+.return-to-content-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  transition: all 0.3s ease;
+}
+
+.return-to-content-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.6);
+}
+
+/* Improve cursor styles for different tools */
+.drawing-canvas[style*="cursor: crosshair"] {
+  cursor: crosshair !important;
+}
+
+.drawing-canvas[style*="cursor: grab"] {
+  cursor: grab !important;
+}
+
+.drawing-canvas[style*="cursor: grabbing"] {
+  cursor: grabbing !important;
+}
+
+.drawing-canvas[style*="cursor: text"] {
+  cursor: text !important;
+}
+
+.drawing-canvas[style*="cursor: cell"] {
+  cursor: cell !important;
+}
+
+/* Selection outline */
+.selected-element {
+  outline: 2px dashed #007acc;
+  outline-offset: 2px;
+}
