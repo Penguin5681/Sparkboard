@@ -166,15 +166,8 @@ export const updateElement = (
 
 export const drawElement = (
   context: CanvasRenderingContext2D,
-  element: DrawingElement,
-  camera: { x: number; y: number; scale: number } = { x: 0, y: 0, scale: 1 }
+  element: DrawingElement
 ) => {
-  context.save();
-  
-  // Apply camera transformation
-  context.translate(camera.x, camera.y);
-  context.scale(camera.scale, camera.scale);
-  
   context.strokeStyle = element.color;
   context.lineWidth = element.strokeWidth;
   context.lineCap = 'round';
@@ -194,6 +187,7 @@ export const drawElement = (
       break;
     
     case 'eraser':
+      context.save();
       context.globalCompositeOperation = 'destination-out';
       context.beginPath();
       element.points.forEach((point, i) => {
@@ -204,7 +198,7 @@ export const drawElement = (
         }
       });
       context.stroke();
-      context.globalCompositeOperation = 'source-over';
+      context.restore();
       break;
     
     case 'rectangle':
@@ -277,9 +271,10 @@ export const drawElement = (
   
   // Draw selection box if selected
   if ((element as any).selected) {
+    context.save();
     context.strokeStyle = '#007acc';
-    context.lineWidth = 2 / camera.scale;
-    context.setLineDash([5 / camera.scale, 5 / camera.scale]);
+    context.lineWidth = 2;
+    context.setLineDash([5, 5]);
     
     // Get element bounds
     const bounds = getElementBounds(element);
@@ -289,10 +284,8 @@ export const drawElement = (
       bounds.width + 10,
       bounds.height + 10
     );
-    context.setLineDash([]);
+    context.restore();
   }
-  
-  context.restore();
 };
 
 export const getElementBounds = (element: DrawingElement) => {
@@ -352,9 +345,9 @@ export const getElementBounds = (element: DrawingElement) => {
   }
 };
 
-export const getCursor = (tool: Tool, isPanning: boolean = false, isSpacePressed: boolean = false) => {
+export const getCursor = (tool: Tool, isPanning: boolean = false, isDragSelecting: boolean = false) => {
   if (isPanning) return 'grabbing';
-  if (isSpacePressed) return 'grab';
+  if (isDragSelecting) return 'crosshair';
   
   switch (tool) {
     case 'pen': return 'crosshair';

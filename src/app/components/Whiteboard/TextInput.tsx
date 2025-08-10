@@ -33,6 +33,7 @@ const TextInput: React.FC<TextInputProps> = ({
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation(); // Prevent global keyboard shortcuts while editing
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       onSubmit(text);
@@ -49,6 +50,7 @@ const TextInput: React.FC<TextInputProps> = ({
     }
   };
 
+  // Convert canvas position to screen position
   const screenPosition = {
     x: position.x * camera.scale + camera.x,
     y: position.y * camera.scale + camera.y
@@ -64,24 +66,27 @@ const TextInput: React.FC<TextInputProps> = ({
       style={{
         position: 'absolute',
         left: screenPosition.x,
-        top: screenPosition.y - fontSize * camera.scale,
+        top: screenPosition.y - (fontSize * camera.scale),
         fontSize: fontSize * camera.scale,
         color: color,
-        background: 'transparent',
+        background: 'rgba(255, 255, 255, 0.9)',
         border: '2px dashed #007acc',
         borderRadius: '4px',
-        padding: '4px',
+        padding: '4px 8px',
         resize: 'none',
         outline: 'none',
         fontFamily: 'Arial, sans-serif',
-        minWidth: '100px',
+        minWidth: '20px',
         minHeight: fontSize * camera.scale + 8,
         zIndex: 1000,
-        transform: 'translateY(-100%)'
+        lineHeight: 1.2,
+        whiteSpace: 'nowrap',
+        overflow: 'hidden'
       }}
       rows={1}
       autoComplete="off"
       spellCheck={false}
+      placeholder="Type text..."
     />
   );
 };

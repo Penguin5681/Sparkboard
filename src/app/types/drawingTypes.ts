@@ -8,6 +8,16 @@ export type Tool =
   | 'eraser'
   | 'select';
 
+export type BackgroundPattern = 'none' | 'grid' | 'dots' | 'lines';
+
+export interface BackgroundSettings {
+  pattern: BackgroundPattern;
+  color: string;
+  patternColor: string;
+  patternSize: number;
+  patternOpacity: number;
+}
+
 export interface Point {
   x: number;
   y: number;
@@ -65,7 +75,7 @@ export interface CanvasState {
   color: string;
   strokeWidth: number;
   fontSize: number;
-  backgroundColor: string;
+  backgroundSettings: BackgroundSettings;
   camera: {
     x: number;
     y: number;
@@ -74,4 +84,7 @@ export interface CanvasState {
   isTextEditing: boolean;
   textEditingElement: DrawingElement | null;
   isPanning: boolean;
+  isDragSelecting: boolean;
+  dragSelectStart: Point | null;
+  dragSelectEnd: Point | null;
 }

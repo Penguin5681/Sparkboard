@@ -36,8 +36,20 @@ A modern, feature-rich infinite whiteboard application built with Next.js, TypeS
 - **Visual Feedback**: Hover effects, active states, and selection indicators
 
 ### 💾 User Experience
-- **Undo/Redo**: Full history management with visual feedback
+- **Undo/Redo**: Full history management with visual feedback and keyboard shortcuts
 - **Persistent Settings**: Background color and preferences saved locally
+- **Professional Shortcuts**: Standard Ctrl+Z/Ctrl+Y for undo/redo
+- **Excalidraw-style Interactions**: Familiar selection and manipulation patterns
+
+### ⌨️ Keyboard Shortcuts
+- **Ctrl+Z** / **Cmd+Z**: Undo last action
+- **Ctrl+Y** / **Cmd+Y**: Redo last undone action  
+- **Ctrl+Shift+Z**: Alternative redo shortcut
+- **Spacebar + Mouse Drag**: Pan around the infinite canvas
+- **Middle Mouse + Drag**: Alternative panning method
+- **Double-click**: Add text at cursor position (any tool)
+- **Enter**: Confirm text input
+- **Escape**: Cancel text input
 - **Keyboard Shortcuts**: Spacebar for panning mode
 - **Context Prevention**: Right-click context menu disabled for smooth interaction
 - **Selection Indicators**: Visual feedback for selected elements
@@ -88,10 +100,11 @@ npm run dev
 - **Return**: Click "Return to Content" when you're far from your drawings
 
 ### Selection and Manipulation
-1. Select the **Select Tool** from the toolbar
-2. Click on any element to select it (blue dashed outline appears)
-3. Drag selected elements to move them around
-4. Click elsewhere to deselect
+1. **Individual Selection**: Select the **Select Tool** and click on any element
+2. **Multi-Selection**: With Select Tool, drag in empty space to create selection rectangle
+3. **Visual Feedback**: Selected elements show blue dashed outlines
+4. **Drag to Move**: Click and drag selected elements to reposition them
+5. **Deselection**: Click in empty space to deselect all elements
 
 ### Customizing Workspace
 1. Use the background color picker in the toolbar

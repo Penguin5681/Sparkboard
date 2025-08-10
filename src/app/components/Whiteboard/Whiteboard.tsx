@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import Toolbar from './Toolbar';
+import SlimToolbar from './SlimToolbar';
 import DrawingTools from './DrawingTools';
 import TextInput from './TextInput';
-import { Point, Tool, DrawingElement, CanvasState } from '../../types/drawingTypes';
+import { Point, Tool, DrawingElement, CanvasState, BackgroundSettings } from '../../types/drawingTypes';
 import { createElement, updateElement, getCursor, screenToCanvas, isPointInElement, getElementBounds } from '../../lib/drawingUtils';
+import './whiteboard.css';
 
 const Whiteboard: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -17,11 +18,20 @@ const Whiteboard: React.FC = () => {
     color: '#ffffff',
     strokeWidth: 5,
     fontSize: 24,
-    backgroundColor: '#000000',
+    backgroundSettings: {
+      pattern: 'none',
+      color: '#000000',
+      patternColor: '#333333',
+      patternSize: 20,
+      patternOpacity: 0.5
+    },
     camera: { x: 0, y: 0, scale: 1 },
     isTextEditing: false,
     textEditingElement: null,
-    isPanning: false
+    isPanning: false,
+    isDragSelecting: false,
+    dragSelectStart: null,
+    dragSelectEnd: null
   });
   
   const [history, setHistory] = useState<DrawingElement[][]>([[]]);
@@ -34,20 +44,67 @@ const Whiteboard: React.FC = () => {
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < history.length - 1;
   
-  // Load background color from localStorage on component mount
+  // Load background settings from localStorage on component mount
   useEffect(() => {
-    const savedBgColor = localStorage.getItem('whiteboard-bg-color');
-    if (savedBgColor) {
-      setCanvasState(prev => ({ ...prev, backgroundColor: savedBgColor }));
+    const savedBgSettings = localStorage.getItem('whiteboard-bg-settings');
+    if (savedBgSettings) {
+      setCanvasState(prev => ({ 
+        ...prev, 
+        backgroundSettings: JSON.parse(savedBgSettings) 
+      }));
     }
   }, []);
+  
+  // Save background settings to localStorage when they change
+  const setBackgroundSettings = (settings: BackgroundSettings) => {
+    setCanvasState(prev => ({ ...prev, backgroundSettings: settings }));
+    localStorage.setItem('whiteboard-bg-settings', JSON.stringify(settings));
+  };
+
+  const undo = useCallback(() => {
+    if (canUndo) {
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      setCanvasState(prev => ({
+        ...prev,
+        elements: history[newIndex],
+        currentElement: null
+      }));
+    }
+  }, [canUndo, historyIndex, history]);
+  
+  const redo = useCallback(() => {
+    if (canRedo) {
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      setCanvasState(prev => ({
+        ...prev,
+        elements: history[newIndex],
+        currentElement: null
+      }));
+    }
+  }, [canRedo, historyIndex, history]);
 
   // Keyboard event handlers
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !canvasState.isTextEditing) {
+      // Don't handle shortcuts while editing text
+      if (canvasState.isTextEditing) return;
+      
+      if (e.code === 'Space') {
         e.preventDefault();
         setIsSpacePressed(true);
+      }
+      
+      // Handle Ctrl+Z (Undo) and Ctrl+Y (Redo)
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'z' && !e.shiftKey) {
+          e.preventDefault();
+          undo();
+        } else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
+          e.preventDefault();
+          redo();
+        }
       }
     };
 
@@ -65,7 +122,7 @@ const Whiteboard: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [canvasState.isTextEditing]);
+  }, [canvasState.isTextEditing, undo, redo]);
 
   // Check if user is far from content
   useEffect(() => {
@@ -149,6 +206,11 @@ const Whiteboard: React.FC = () => {
   };
 
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    // Only zoom when Ctrl is pressed, otherwise allow normal scrolling
+    if (!e.ctrlKey && !e.metaKey) {
+      return;
+    }
+    
     e.preventDefault();
     
     const canvas = canvasRef.current;
@@ -174,10 +236,10 @@ const Whiteboard: React.FC = () => {
   };
 
   const handleTextSubmit = (text: string) => {
-    if (canvasState.textEditingElement) {
+    if (canvasState.textEditingElement && text.trim()) {
       const updatedElement = {
         ...canvasState.textEditingElement,
-        text
+        text: text.trim()
       };
       
       const updatedElements = canvasState.elements.map(el => 
@@ -192,6 +254,8 @@ const Whiteboard: React.FC = () => {
       }));
       
       saveHistory(updatedElements);
+    } else {
+      handleTextCancel();
     }
   };
 
@@ -265,15 +329,14 @@ const Whiteboard: React.FC = () => {
         
         setDragStart(canvasPos);
       } else {
-        // Deselect all
-        const updatedElements = canvasState.elements.map(el => ({
-          ...el,
-          selected: false
-        }));
-        
+        // Start drag selection
         setCanvasState(prev => ({
           ...prev,
-          elements: updatedElements,
+          isDragSelecting: true,
+          dragSelectStart: canvasPos,
+          dragSelectEnd: canvasPos,
+          // Deselect all elements
+          elements: prev.elements.map(el => ({ ...el, selected: false })),
           selectedElement: null
         }));
       }
@@ -319,6 +382,16 @@ const Whiteboard: React.FC = () => {
       }));
       
       setLastPanPoint(screenPos);
+      return;
+    }
+    
+    // Handle drag selection
+    if (canvasState.isDragSelecting && canvasState.dragSelectStart) {
+      const canvasPos = screenToCanvas(screenPos, canvasState.camera);
+      setCanvasState(prev => ({
+        ...prev,
+        dragSelectEnd: canvasPos
+      }));
       return;
     }
     
@@ -382,6 +455,47 @@ const Whiteboard: React.FC = () => {
       return;
     }
     
+    // Handle drag selection completion
+    if (canvasState.isDragSelecting && canvasState.dragSelectStart && canvasState.dragSelectEnd) {
+      const start = canvasState.dragSelectStart;
+      const end = canvasState.dragSelectEnd;
+      
+      // Create selection rectangle
+      const selectionRect = {
+        x: Math.min(start.x, end.x),
+        y: Math.min(start.y, end.y),
+        width: Math.abs(end.x - start.x),
+        height: Math.abs(end.y - start.y)
+      };
+      
+      // Select elements that intersect with selection rectangle
+      const selectedElements = canvasState.elements.filter(element => {
+        const bounds = getElementBounds(element);
+        return (
+          bounds.x < selectionRect.x + selectionRect.width &&
+          bounds.x + bounds.width > selectionRect.x &&
+          bounds.y < selectionRect.y + selectionRect.height &&
+          bounds.y + bounds.height > selectionRect.y
+        );
+      });
+      
+      const updatedElements = canvasState.elements.map(el => ({
+        ...el,
+        selected: selectedElements.some(selected => selected.id === el.id)
+      }));
+      
+      setCanvasState(prev => ({
+        ...prev,
+        elements: updatedElements,
+        isDragSelecting: false,
+        dragSelectStart: null,
+        dragSelectEnd: null,
+        selectedElement: selectedElements.length === 1 ? selectedElements[0] : null
+      }));
+      
+      return;
+    }
+    
     if (dragStart) {
       if (canvasState.selectedElement) {
         saveHistory(canvasState.elements);
@@ -407,82 +521,56 @@ const Whiteboard: React.FC = () => {
     handleMouseUp();
   };
   
-  const undo = () => {
-    if (canUndo) {
-      const newIndex = historyIndex - 1;
-      setHistoryIndex(newIndex);
-      setCanvasState(prev => ({
-        ...prev,
-        elements: history[newIndex],
-        currentElement: null
-      }));
-    }
-  };
-  
-  const redo = () => {
-    if (canRedo) {
-      const newIndex = historyIndex + 1;
-      setHistoryIndex(newIndex);
-      setCanvasState(prev => ({
-        ...prev,
-        elements: history[newIndex],
-        currentElement: null
-      }));
-    }
-  };
-  
   return (
-    <div className="whiteboard-container">
-      <Toolbar
+    <div className="whiteboard-fullscreen">
+      <SlimToolbar
         tool={canvasState.tool}
-        setTool={(tool) => setCanvasState(prev => ({ ...prev, tool }))}
+        setTool={(tool: Tool) => setCanvasState(prev => ({ ...prev, tool }))}
         color={canvasState.color}
-        setColor={(color) => setCanvasState(prev => ({ ...prev, color }))}
+        setColor={(color: string) => setCanvasState(prev => ({ ...prev, color }))}
         strokeWidth={canvasState.strokeWidth}
-        setStrokeWidth={(width) => setCanvasState(prev => ({ ...prev, strokeWidth: width }))}
+        setStrokeWidth={(width: number) => setCanvasState(prev => ({ ...prev, strokeWidth: width }))}
         fontSize={canvasState.fontSize}
-        setFontSize={(size) => setCanvasState(prev => ({ ...prev, fontSize: size }))}
-        backgroundColor={canvasState.backgroundColor}
-        setBackgroundColor={setBackgroundColor}
+        setFontSize={(size: number) => setCanvasState(prev => ({ ...prev, fontSize: size }))}
+        backgroundSettings={canvasState.backgroundSettings}
+        setBackgroundSettings={setBackgroundSettings}
         undo={undo}
         redo={redo}
         canUndo={canUndo}
         canRedo={canRedo}
       />
       
-      <div className="canvas-container">
-        {showReturnToContent && (
-          <button 
-            className="return-to-content-btn"
-            onClick={returnToContent}
-          >
-            Return to Content
-          </button>
-        )}
-        
-        <DrawingTools 
-          canvasState={canvasState} 
-          canvasRef={canvasRef}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
-          onDoubleClick={handleDoubleClick}
-          onWheel={handleWheel}
+      {showReturnToContent && (
+        <button 
+          className="return-to-content-btn"
+          onClick={returnToContent}
+        >
+          Return to Content
+        </button>
+      )}
+      
+      <DrawingTools 
+        canvasState={canvasState} 
+        canvasRef={canvasRef}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        onDoubleClick={handleDoubleClick}
+        onWheel={handleWheel}
+      />
+      
+      {canvasState.isTextEditing && canvasState.textEditingElement && (
+        <TextInput
+          position={canvasState.textEditingElement.points[0]}
+          fontSize={(canvasState.textEditingElement as any).fontSize || canvasState.fontSize}
+          color={canvasState.textEditingElement.color}
+          initialValue={(canvasState.textEditingElement as any).text || ''}
+          onSubmit={handleTextSubmit}
+          onCancel={handleTextCancel}
+          camera={canvasState.camera}
         />
-        
-        {canvasState.isTextEditing && canvasState.textEditingElement && (
-          <TextInput
-            position={canvasState.textEditingElement.points[0]}
-            fontSize={(canvasState.textEditingElement as any).fontSize || canvasState.fontSize}
-            color={canvasState.textEditingElement.color}
-            initialValue={(canvasState.textEditingElement as any).text || ''}
-            onSubmit={handleTextSubmit}
-            onCancel={handleTextCancel}
-            camera={canvasState.camera}
-          />
-        )}
-      </div>
+      )}
     </div>
   );
 };

@@ -3,8 +3,7 @@ import Whiteboard from './components/Whiteboard';
 
 const Home: React.FC = () => {
   return (
-    <div className="app">
-      <h1>Local Whiteboard</h1>
+    <div className="app-fullscreen">
       <Whiteboard />
     </div>
   );
