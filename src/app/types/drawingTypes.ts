@@ -63,4 +63,5 @@ export interface CanvasState {
   color: string;
   strokeWidth: number;
   fontSize: number;
+  backgroundColor: string;
 }

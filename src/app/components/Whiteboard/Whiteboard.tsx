@@ -15,20 +15,90 @@ const Whiteboard: React.FC = () => {
     tool: 'pen',
     color: '#000000',
     strokeWidth: 5,
-    fontSize: 24
+    fontSize: 24,
+    backgroundColor: '#000000'
   });
   
   const [history, setHistory] = useState<DrawingElement[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState(0);
+  const [isWaitingForText, setIsWaitingForText] = useState(false);
   
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < history.length - 1;
+  
+  // Load background color from localStorage on component mount
+  React.useEffect(() => {
+    const savedBgColor = localStorage.getItem('whiteboard-bg-color');
+    if (savedBgColor) {
+      setCanvasState(prev => ({ ...prev, backgroundColor: savedBgColor }));
+    }
+  }, []);
+  
+  // Save background color to localStorage when it changes
+  const setBackgroundColor = (color: string) => {
+    setCanvasState(prev => ({ ...prev, backgroundColor: color }));
+    localStorage.setItem('whiteboard-bg-color', color);
+  };
   
   const saveHistory = useCallback((elements: DrawingElement[]) => {
     const newHistory = [...history.slice(0, historyIndex + 1), elements];
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
   }, [history, historyIndex]);
+  
+  const handleDoubleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const point: Point = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+    
+    const textElement = createElement(
+      'text',
+      point,
+      canvasState.color,
+      canvasState.strokeWidth,
+      canvasState.fontSize
+    ) as DrawingElement;
+    
+    setCanvasState(prev => ({
+      ...prev,
+      elements: [...prev.elements, textElement],
+      currentElement: textElement
+    }));
+    
+    // Create a text input for editing
+    const text = prompt('Enter text:', '');
+    if (text !== null && canvasState.currentElement && canvasState.currentElement.type === 'text') {
+      const updatedElement = {
+        ...canvasState.currentElement,
+        text
+      };
+      
+      const updatedElements = [
+        ...canvasState.elements.slice(0, -1),
+        updatedElement
+      ];
+      
+      setCanvasState(prev => ({
+        ...prev,
+        elements: updatedElements,
+        currentElement: null
+      }));
+      
+      saveHistory(updatedElements);
+    } else {
+      // Remove empty text element if canceled
+      setCanvasState(prev => ({
+        ...prev,
+        elements: prev.elements.slice(0, -1),
+        currentElement: null
+      }));
+    }
+  };
   
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -40,50 +110,8 @@ const Whiteboard: React.FC = () => {
       y: e.clientY - rect.top
     };
     
+    // Skip regular mouse down handling for text tool - only use double-click
     if (canvasState.tool === 'text') {
-      const textElement = createElement(
-        'text',
-        point,
-        canvasState.color,
-        canvasState.strokeWidth,
-        canvasState.fontSize
-      ) as DrawingElement;
-      
-      setCanvasState(prev => ({
-        ...prev,
-        elements: [...prev.elements, textElement],
-        currentElement: textElement
-      }));
-      
-      // Focus on text input
-      const text = prompt('Enter text:', '');
-      if (text !== null && canvasState.currentElement && canvasState.currentElement.type === 'text') {
-        const updatedElement = {
-          ...canvasState.currentElement,
-          text
-        };
-        
-        const updatedElements = [
-          ...canvasState.elements.slice(0, -1),
-          updatedElement
-        ];
-        
-        setCanvasState(prev => ({
-          ...prev,
-          elements: updatedElements,
-          currentElement: null
-        }));
-        
-        saveHistory(updatedElements);
-      } else {
-        // Remove empty text element if canceled
-        setCanvasState(prev => ({
-          ...prev,
-          elements: prev.elements.slice(0, -1),
-          currentElement: null
-        }));
-      }
-      
       return;
     }
     
@@ -179,6 +207,8 @@ const Whiteboard: React.FC = () => {
         setStrokeWidth={(width) => setCanvasState(prev => ({ ...prev, strokeWidth: width }))}
         fontSize={canvasState.fontSize}
         setFontSize={(size) => setCanvasState(prev => ({ ...prev, fontSize: size }))}
+        backgroundColor={canvasState.backgroundColor}
+        setBackgroundColor={setBackgroundColor}
         undo={undo}
         redo={redo}
         canUndo={canUndo}
@@ -193,6 +223,7 @@ const Whiteboard: React.FC = () => {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
+          onDoubleClick={handleDoubleClick}
         />
       </div>
     </div>

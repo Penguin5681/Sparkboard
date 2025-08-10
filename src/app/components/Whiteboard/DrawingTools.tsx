@@ -11,6 +11,7 @@ interface DrawingToolsProps {
   onMouseMove: (e: React.MouseEvent<HTMLCanvasElement>) => void;
   onMouseUp: () => void;
   onMouseLeave: () => void;
+  onDoubleClick: (e: React.MouseEvent<HTMLCanvasElement>) => void;
 }
 
 const DrawingTools: React.FC<DrawingToolsProps> = ({ 
@@ -19,7 +20,8 @@ const DrawingTools: React.FC<DrawingToolsProps> = ({
   onMouseDown,
   onMouseMove,
   onMouseUp,
-  onMouseLeave
+  onMouseLeave,
+  onDoubleClick
 }) => {
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   
@@ -57,6 +59,10 @@ const DrawingTools: React.FC<DrawingToolsProps> = ({
     // Clear canvas
     context.clearRect(0, 0, context.canvas.width, context.canvas.height);
     
+    // Set background color
+    context.fillStyle = canvasState.backgroundColor;
+    context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+    
     // Draw all elements
     canvasState.elements.forEach(element => {
       drawElement(context, element);
@@ -73,13 +79,14 @@ const DrawingTools: React.FC<DrawingToolsProps> = ({
       ref={canvasRef}
       className="drawing-canvas"
       style={{ 
-        backgroundColor: '#ffffff',
+        backgroundColor: canvasState.backgroundColor,
         cursor: getCursor(canvasState.tool)
       }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseLeave}
+      onDoubleClick={onDoubleClick}
     />
   );
 };
