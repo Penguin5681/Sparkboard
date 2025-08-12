@@ -176,8 +176,9 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
 
         <div className="toolbar-divider"></div>
 
+        {/* TODO: Implement this in the future */}
         {/* Collaboration Controls */}
-        <div className="collaboration-group">
+        {/* <div className="collaboration-group">
           {!sessionInfo?.sessionId ? (
             <>
               <button
@@ -210,7 +211,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
               </button>
             </>
           )}
-        </div>
+        </div> */}
       </div>
 
       {/* Join Session Dialog */}
