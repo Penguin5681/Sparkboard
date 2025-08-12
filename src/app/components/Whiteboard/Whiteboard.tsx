@@ -6,6 +6,8 @@ import DrawingTools from './DrawingTools';
 import TextInput from './TextInput';
 import { Point, Tool, DrawingElement, CanvasState, BackgroundSettings } from '../../types/drawingTypes';
 import { createElement, updateElement, getCursor, screenToCanvas, isPointInElement, getElementBounds } from '../../lib/drawingUtils';
+import { collaborationService } from '../../lib/collaborationService';
+import { localStorageService } from '../../lib/localStorageService';
 import './whiteboard.css';
 
 const Whiteboard: React.FC = () => {
@@ -41,6 +43,24 @@ const Whiteboard: React.FC = () => {
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [showReturnToContent, setShowReturnToContent] = useState(false);
   
+  // Collaboration state
+  const [sessionInfo, setSessionInfo] = useState<{
+    sessionId: string | null;
+    isHost: boolean;
+    participantCount: number;
+  }>({
+    sessionId: null,
+    isHost: false,
+    participantCount: 0,
+  });
+  
+  // Store local board backup when joining sessions
+  const [localBoardBackup, setLocalBoardBackup] = useState<{
+    elements: DrawingElement[];
+    backgroundSettings: BackgroundSettings;
+    camera: { x: number; y: number; scale: number };
+  } | null>(null);
+  
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < history.length - 1;
   
@@ -60,6 +80,160 @@ const Whiteboard: React.FC = () => {
     setCanvasState(prev => ({ ...prev, backgroundSettings: settings }));
     localStorage.setItem('whiteboard-bg-settings', JSON.stringify(settings));
   };
+
+  // Initialize collaboration and local storage services
+  useEffect(() => {
+    let isInitializing = true;
+    
+    // Check if there's a session ID in the URL first
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionParam = urlParams.get('session');
+    
+    // Only load local data if not joining a collaborative session
+    if (!sessionParam) {
+      const savedState = localStorageService.loadCanvasState();
+      if (savedState.elements && savedState.elements.length > 0) {
+        setCanvasState(prev => ({ 
+          ...prev, 
+          elements: savedState.elements!,
+          backgroundSettings: savedState.backgroundSettings || prev.backgroundSettings,
+          camera: savedState.camera || prev.camera,
+        }));
+        setHistory([savedState.elements!]);
+        setHistoryIndex(0);
+      }
+    }
+
+    // Set up collaboration event handlers
+    collaborationService.setHandlers({
+      onSessionJoined: (sessionId, user, elements) => {
+        console.log('Session joined, switching to collaborative board');
+        
+        // Backup current local board before switching to collaborative board
+        setLocalBoardBackup((prevBackup) => {
+          if (!prevBackup) {
+            // Get current state from localStorage as fallback
+            const currentElements = JSON.parse(localStorage.getItem('sparkboard_data') || '{"elements": []}').elements || [];
+            const currentBg = JSON.parse(localStorage.getItem('whiteboard-bg-settings') || '{"pattern": "none", "color": "#000000"}');
+            return {
+              elements: currentElements,
+              backgroundSettings: currentBg,
+              camera: { x: 0, y: 0, scale: 1 },
+            };
+          }
+          return prevBackup;
+        });
+        
+        // Update session info first to stop local storage sync
+        setSessionInfo({
+          sessionId,
+          isHost: false,
+          participantCount: 1, // Will be updated by other events
+        });
+        
+        // Switch to collaborative board
+        setCanvasState(prev => ({ ...prev, elements }));
+        setHistory([elements]);
+        setHistoryIndex(0);
+      },
+      onElementsUpdate: (elements, currentElement) => {
+        // Update elements with smooth real-time updates
+        setCanvasState(prev => ({ 
+          ...prev, 
+          elements,
+          currentElement: currentElement || null // Show other users' current drawing
+        }));
+        
+        // Only update history for completed elements (not currentElement)
+        if (!currentElement) {
+          setHistory(prev => [...prev.slice(0, historyIndex + 1), elements]);
+          setHistoryIndex(prev => prev + 1);
+        }
+      },
+      onUserJoined: (user) => {
+        setSessionInfo(prev => ({ 
+          ...prev, 
+          participantCount: prev.participantCount + 1 
+        }));
+      },
+      onUserLeft: (userId) => {
+        setSessionInfo(prev => ({ 
+          ...prev, 
+          participantCount: Math.max(1, prev.participantCount - 1) 
+        }));
+      },
+      onError: (error) => {
+        console.error('Collaboration error:', error);
+        alert(`Collaboration error: ${error}`);
+      },
+    });
+
+    // Auto-join session if URL parameter exists
+    if (sessionParam) {
+      setTimeout(() => {
+        // Get current state for backup
+        setLocalBoardBackup((prevBackup) => {
+          if (!prevBackup) {
+            const currentElements = JSON.parse(localStorage.getItem('sparkboard_data') || '{"elements": []}').elements || [];
+            const currentBg = JSON.parse(localStorage.getItem('whiteboard-bg-settings') || '{"pattern": "none", "color": "#000000"}');
+            return {
+              elements: currentElements,
+              backgroundSettings: currentBg,
+              camera: { x: 0, y: 0, scale: 1 },
+            };
+          }
+          return prevBackup;
+        });
+        
+        collaborationService.joinSession(sessionParam, 'Anonymous User').catch((error) => {
+          console.error('Failed to auto-join session:', error);
+          alert('Failed to join session from URL');
+        });
+      }, 500); // Reduced delay for faster connection
+    }
+
+    // Set up data change handler for multi-tab sync (only for local boards)
+    localStorageService.setDataChangeHandler((elements) => {
+      // Critical fix: Only sync if not in a collaborative session
+      if (!sessionInfo.sessionId && !isInitializing) {
+        setCanvasState(prev => ({ ...prev, elements }));
+      }
+    });
+
+    // Only set up auto-save for local boards
+    if (!sessionParam) {
+      localStorageService.startAutoSave(() => canvasState.elements);
+    }
+
+    // Mark initialization as complete
+    setTimeout(() => {
+      isInitializing = false;
+    }, 1000);
+
+    return () => {
+      collaborationService.leaveSession();
+      localStorageService.stopAutoSave();
+    };
+  }, []); // Empty dependency array to run only once
+
+  // Auto-save canvas state when elements change (only for local boards)
+  useEffect(() => {
+    // Only save to local storage if not in a collaborative session
+    if (!sessionInfo.sessionId) {
+      localStorageService.saveCanvasState({
+        elements: canvasState.elements,
+        backgroundSettings: canvasState.backgroundSettings,
+        camera: canvasState.camera,
+      });
+    }
+  }, [canvasState.elements, canvasState.backgroundSettings, canvasState.camera, sessionInfo.sessionId]);
+
+  // Send updates to collaboration service when elements change
+  useEffect(() => {
+    if (sessionInfo.sessionId) {
+      collaborationService.sendDrawingUpdate(canvasState.elements, canvasState.currentElement || undefined);
+    }
+  }, [canvasState.elements, canvasState.currentElement, sessionInfo.sessionId]);
 
   const undo = useCallback(() => {
     if (canUndo) {
@@ -520,6 +694,82 @@ const Whiteboard: React.FC = () => {
   const handleMouseLeave = () => {
     handleMouseUp();
   };
+
+  // Collaboration handlers
+  const handleStartSession = useCallback(async () => {
+    try {
+      // Backup current board before starting session
+      setLocalBoardBackup({
+        elements: canvasState.elements,
+        backgroundSettings: canvasState.backgroundSettings,
+        camera: canvasState.camera,
+      });
+      
+      const { sessionId, inviteLink } = await collaborationService.createSession();
+      setSessionInfo({
+        sessionId,
+        isHost: true,
+        participantCount: 1,
+      });
+      
+      // Copy invite link to clipboard
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(inviteLink);
+        alert(`Session started! Invite link copied to clipboard:\n${inviteLink}\n\nShare this link with others to collaborate on your board.`);
+      } else {
+        alert(`Session started! Share this link:\n${inviteLink}`);
+      }
+    } catch (error) {
+      console.error('Failed to start session:', error);
+      alert('Failed to start collaboration session');
+    }
+  }, [canvasState.elements, canvasState.backgroundSettings, canvasState.camera]);
+
+  const handleJoinSession = useCallback(async (sessionId: string) => {
+    try {
+      // Backup current board before joining
+      setLocalBoardBackup({
+        elements: canvasState.elements,
+        backgroundSettings: canvasState.backgroundSettings,
+        camera: canvasState.camera,
+      });
+      
+      await collaborationService.joinSession(sessionId, 'Anonymous User');
+      // Session info will be updated by the onSessionJoined handler
+    } catch (error) {
+      console.error('Failed to join session:', error);
+      alert('Failed to join session. Please check the session ID.');
+    }
+  }, [canvasState.elements, canvasState.backgroundSettings, canvasState.camera]);
+
+  const handleLeaveSession = useCallback(() => {
+    collaborationService.leaveSession();
+    
+    if (localBoardBackup) {
+      setCanvasState(prev => ({
+        ...prev,
+        elements: localBoardBackup.elements,
+        backgroundSettings: localBoardBackup.backgroundSettings,
+        camera: localBoardBackup.camera,
+      }));
+      setHistory([localBoardBackup.elements]);
+      setHistoryIndex(0);
+      
+      localStorageService.saveCanvasState({
+        elements: localBoardBackup.elements,
+        backgroundSettings: localBoardBackup.backgroundSettings,
+        camera: localBoardBackup.camera,
+      });
+      
+      setLocalBoardBackup(null);
+    }
+    
+    setSessionInfo({
+      sessionId: null,
+      isHost: false,
+      participantCount: 0,
+    });
+  }, [localBoardBackup]);
   
   return (
     <div className="whiteboard-fullscreen">
@@ -538,6 +788,10 @@ const Whiteboard: React.FC = () => {
         redo={redo}
         canUndo={canUndo}
         canRedo={canRedo}
+        onStartSession={handleStartSession}
+        onJoinSession={handleJoinSession}
+        onLeaveSession={handleLeaveSession}
+        sessionInfo={sessionInfo}
       />
       
       {showReturnToContent && (

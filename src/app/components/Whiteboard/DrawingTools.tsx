@@ -27,6 +27,25 @@ const DrawingTools: React.FC<DrawingToolsProps> = ({
   onWheel
 }) => {
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
+  const [mousePosition, setMousePosition] = React.useState<{ x: number; y: number } | null>(null);
+  
+  // Track mouse position for eraser highlight
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left - canvasState.camera.x) / canvasState.camera.scale;
+    const y = (e.clientY - rect.top - canvasState.camera.y) / canvasState.camera.scale;
+    
+    setMousePosition({ x, y });
+    onMouseMove(e);
+  };
+  
+  const handleMouseLeave = () => {
+    setMousePosition(null);
+    onMouseLeave();
+  };
   
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -129,8 +148,24 @@ const DrawingTools: React.FC<DrawingToolsProps> = ({
       context.setLineDash([]);
     }
     
+    // Draw eraser size highlight
+    if (canvasState.tool === 'eraser' && mousePosition) {
+      const eraserRadius = canvasState.strokeWidth;
+      
+      context.strokeStyle = '#ff0000';
+      context.lineWidth = 2 / canvasState.camera.scale; // Maintain consistent visual width
+      context.fillStyle = 'rgba(255, 0, 0, 0.1)';
+      context.setLineDash([5, 5]);
+      
+      context.beginPath();
+      context.arc(mousePosition.x, mousePosition.y, eraserRadius, 0, 2 * Math.PI);
+      context.fill();
+      context.stroke();
+      context.setLineDash([]);
+    }
+
     context.restore();
-  }, [canvasState]);
+  }, [canvasState, mousePosition]);
   
   return (
     <canvas
@@ -141,9 +176,9 @@ const DrawingTools: React.FC<DrawingToolsProps> = ({
         cursor: getCursor(canvasState.tool, canvasState.isPanning, canvasState.isDragSelecting)
       }}
       onMouseDown={onMouseDown}
-      onMouseMove={onMouseMove}
+      onMouseMove={handleMouseMove}
       onMouseUp={onMouseUp}
-      onMouseLeave={onMouseLeave}
+      onMouseLeave={handleMouseLeave}
       onDoubleClick={onDoubleClick}
       onWheel={onWheel}
       onContextMenu={(e) => e.preventDefault()} // Prevent context menu on right click
