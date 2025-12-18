@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "konva": "^9.3.22",
-    "next": "15.4.6",
+    "next": "15.4.10",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-konva": "^19.0.7"
